@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 interface GeneratorConfig {
     src?: string;
     key: string;

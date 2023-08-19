@@ -1,8 +1,7 @@
-#!/usr/bin/env node
-
+import { pathToFileURL } from 'url';
+import path from 'path';
 import { program } from 'commander';
 import fs from 'fs/promises';
-import path from 'path';
 import { execSync } from 'child_process';
 import fetch from 'node-fetch';
 import { Validator } from 'jsonschema';
@@ -34,6 +33,7 @@ async function fetchAndCache(apiConfig: ApiConfig) {
     try {
         const response = await fetch(apiConfig.input);
         const data = await response.json();
+
         const outputPath = path.resolve(
             process.cwd(),
             `${apiConfig.output}${apiConfig.generator.key}.json`
@@ -70,48 +70,53 @@ export async function processApis(config: Config) {
     }
 }
 
-// Define the main command
-program
-    .version(require('./package.json').version)
-    .description('API Cache Code Generation CLI');
+function runCLI() {
+    // Define the main command
+    program
+        .version(process.env.npm_package_version!)
+        .description('API Cache Code Generation CLI');
 
-// Define a subcommand for processing APIs
-program
-    .command('process')
-    .description('Fetch and cache APIs based on config')
-    .option(
-        '-c, --config <path>',
-        'Path to the config file',
-        './.cache-codegen.json'
-    )
-    .action(async (options) => {
-        try {
-            const configPath = path.resolve(process.cwd(), options.config);
-            const configContent = await fs.readFile(configPath, 'utf8');
-            const config: Config = JSON.parse(configContent);
+    // Define a subcommand for processing APIs
+    program
+        .command('process')
+        .description('Fetch and cache APIs based on config')
+        .option(
+            '-c, --config <path>',
+            'Path to the config file',
+            './.cache-codegen.json'
+        )
+        .action(async (options) => {
+            try {
+                const configPath = path.resolve(process.cwd(), options.config);
+                const configContent = await fs.readFile(configPath, 'utf8');
+                const config: Config = JSON.parse(configContent);
 
-            // Load and validate JSON schema
-            const validator = new Validator();
-            const schemaPath = path.resolve(process.cwd(), config.$schema);
-            const schemaContent = await fs.readFile(schemaPath, 'utf8');
-            const schema = JSON.parse(schemaContent);
-            const validationResult = validator.validate(config, schema);
+                // Load and validate JSON schema
+                const validator = new Validator();
+                const schemaPath = path.resolve(process.cwd(), config.$schema);
+                const schemaContent = await fs.readFile(schemaPath, 'utf8');
+                const schema = JSON.parse(schemaContent);
+                const validationResult = validator.validate(config, schema);
 
-            if (!validationResult.valid) {
-                console.error(
-                    'Invalid configuration:',
-                    validationResult.errors
-                );
-                return;
+                if (!validationResult.valid) {
+                    console.error(
+                        'Invalid configuration:',
+                        validationResult.errors
+                    );
+                    return;
+                }
+
+                await processApis(config);
+            } catch (error) {
+                console.error('An error occurred:', error);
             }
+        });
 
-            await processApis(config);
-        } catch (error) {
-            console.error('An error occurred:', error);
-        }
-    });
-
-// Parse the command line arguments if the script is being run directly
-if (require.main === module) {
+    // Parse the command line arguments if the script is being run directly
     program.parse(process.argv);
+}
+
+// @ts-ignore
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+    runCLI();
 }
